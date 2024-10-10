@@ -37,7 +37,7 @@ connectDB();
 // POST route to add sensor data to the database
 app.post('/add-sensor-data', async (req, res) => {
   try {
-    if (req.body.API_KEY !== process.env.SECRET_KEY) {
+    if (req.body.EMONITOR_API_KEY !== process.env.SECRET_KEY) {
       return res.status(401).send('Unauthorized');
     }
 
