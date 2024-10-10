@@ -144,7 +144,6 @@
     // Prepare data for the chart
     const labels = sensorData.map(data => new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     const temperatureData = sensorData.map(data => data.temperature);
-    const humidityData = sensorData.map(data => data.humidity);
     const co2Data = sensorData.map(data => data.co2);
     const tvocData = sensorData.map(data => data.tvoc);
     const lightLevelData = sensorData.map(data => data.lightLevel);
@@ -160,14 +159,6 @@
             label: 'Temperature (°C)',
             data: temperatureData,
             borderColor: 'rgba(255, 99, 132, 1)',
-            fill: false,
-            pointRadius: 5,
-            pointHoverRadius: 7
-          },
-          {
-            label: 'Humidity (%)',
-            data: humidityData,
-            borderColor: 'rgba(54, 162, 235, 1)',
             fill: false,
             pointRadius: 5,
             pointHoverRadius: 7

@@ -43,7 +43,6 @@ app.post('/add-sensor-data', async (req, res) => {
 
     const newSensorData = new SensorData({
       temperature: parseFloat(req.body.temperature) || 0,
-      humidity: parseFloat(req.body.humidity) || 0,
       co2: parseFloat(req.body.co2) || 0,
       tvoc: parseFloat(req.body.tvoc) || 0,
       lightLevel: parseFloat(req.body.lightLevel) || 0,
@@ -96,7 +95,6 @@ app.get('/latest-sensor-data', async (req, res) => {
       // Return the data in JSON format
       res.json({
         temperature: latestSensorData.temperature,
-        humidity: latestSensorData.humidity,
         co2: latestSensorData.co2,
         tvoc: latestSensorData.tvoc,
         lightLevel: latestSensorData.lightLevel,

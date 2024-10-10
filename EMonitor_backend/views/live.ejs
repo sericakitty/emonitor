@@ -90,10 +90,6 @@
       return `${temperature}°C`;
     }
 
-    function getHumidityDescription(humidity) {
-      return `${humidity}%`; 
-    }
-
     // Function to compute CO2 level description
     function getCO2Description(co2) {
       if (co2 < 1000) {
@@ -138,10 +134,9 @@
 
       sensorDataDiv.innerHTML = '';  // Clear previous data
 
-      const sensorTypes = ['temperature', 'humidity', 'co2', 'tvoc', 'lightLevel'];
+      const sensorTypes = ['temperature', 'co2', 'tvoc', 'lightLevel'];
       const sensorLabels = {
         temperature: 'Temperature',
-        humidity: 'Humidity',
         co2: 'CO2 Level',
         tvoc: 'Air Quality (TVOC)',
         lightLevel: 'Light Level',
@@ -152,8 +147,6 @@
         let description;
         if (type === 'temperature') {
           description = getTemperatureDescription(data.temperature);
-        } else if (type === 'humidity') {
-          description = getHumidityDescription(data.humidity);
         } else if (type === 'co2') {
           description = getCO2Description(data.co2);
         } else if (type === 'lightLevel') {

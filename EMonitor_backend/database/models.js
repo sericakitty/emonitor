@@ -12,7 +12,6 @@ const UserSchema = new mongoose.Schema({
 // Sensor Data Schema
 const SensorDataSchema = new mongoose.Schema({
   temperature: Number,
-  humidity: Number,
   co2: Number,
   tvoc: Number,
   lightLevel: String,
