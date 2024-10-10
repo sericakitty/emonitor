@@ -1,0 +1,281 @@
+<!-- history.ejs -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sensor Data History</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Include Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Include Flatpickr CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <!-- Include Flatpickr JS -->
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <style>
+    body, html {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+      height: 85%;
+      width: 100%;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+    }
+
+    nav {
+      text-align: center;
+      margin-top: 20px;
+      margin-bottom: 10px;
+    }
+
+    a {
+      margin: 0 10px;
+      text-decoration: none;
+      color: blue;
+      font-size: 1.2rem;
+    }
+
+    .date-picker {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    form {
+      display: inline-block;
+    }
+
+    button {
+      padding: 5px 10px;
+      font-size: 1rem;
+    }
+
+    #date {
+      font-size: 1rem;
+      padding: 5px;
+      width: 150px;
+      /* Add calendar icon */
+      background-image: url('data:image/svg+xml;utf8,<svg fill="%23999" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M7 10h5v5H7z" opacity=".3"/><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H5V8h14v13zM7 10h5v5H7z"/></svg>');
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 20px 20px;
+      /* Add padding to make room for the icon */
+      padding-right: 35px;
+      box-sizing: border-box;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 70vh;
+      padding-left: 50px;
+      padding-right: 50px;
+    }
+
+    /* Media Queries for Mobile Responsiveness */
+    @media screen and (max-width: 768px) {
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      a {
+        font-size: 1rem;
+      }
+
+      button, #date {
+        font-size: 0.9rem;
+      }
+
+      canvas {
+        height: 65vh;
+      }
+    }
+
+    @media screen and (max-width: 480px) {
+      h1 {
+        font-size: 1.2rem;
+      }
+
+      a {
+        font-size: 0.9rem;
+      }
+
+      button, #date {
+        font-size: 0.8rem;
+      }
+
+      body {
+        padding: 0;
+      }
+
+      canvas {
+        max-height: 80%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Live View</a> | 
+    <a href="/history">History View</a>
+  </nav>
+
+  <h1>Sensor Data History</h1>
+
+  <!-- Date picker form -->
+  <div class="date-picker">
+    <form action="/history" method="get">
+      <label for="date">Select Date:</label>
+      <input type="text" id="date" name="date" value="<%= selectedDate %>" placeholder="Select date" readonly>
+      <button type="submit">View</button>
+    </form>
+  </div>
+
+  <!-- Chart canvas -->
+  <canvas id="sensorChart"></canvas>
+    
+  <script>
+    const sensorData = <%- JSON.stringify(sensorData) %>;
+
+    // Prepare data for the chart
+    const labels = sensorData.map(data => new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    const temperatureData = sensorData.map(data => data.temperature);
+    const humidityData = sensorData.map(data => data.humidity);
+    const co2Data = sensorData.map(data => data.co2);
+    const tvocData = sensorData.map(data => data.tvoc);
+    const lightLevelData = sensorData.map(data => data.lightLevel);
+
+    const ctx = document.getElementById('sensorChart').getContext('2d');
+
+    const sensorChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Temperature (°C)',
+            data: temperatureData,
+            borderColor: 'rgba(255, 99, 132, 1)',
+            fill: false,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          },
+          {
+            label: 'Humidity (%)',
+            data: humidityData,
+            borderColor: 'rgba(54, 162, 235, 1)',
+            fill: false,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          },
+          {
+            label: 'CO2 (ppm)',
+            data: co2Data,
+            borderColor: 'rgba(255, 206, 86, 1)',
+            fill: false,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          },
+          {
+            label: 'TVOC (ppb)',
+            data: tvocData,
+            borderColor: 'rgba(75, 192, 192, 1)',
+            fill: false,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          },
+          {
+            label: 'Light Level (lux)',
+            data: lightLevelData,
+            borderColor: 'rgba(153, 102, 255, 1)',
+            fill: false,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        /**
+         * Remove left and right padding to allow data points to reach the edges.
+         */
+        layout: {
+          padding: {
+            left: 0,
+            right: 0
+          }
+        },
+        scales: {
+          x: {
+            /**
+             * Set offset to false to align the first and last data points with the edges.
+             */
+            offset: false,
+            title: {
+              display: true,
+              text: 'Time'
+            },
+            ticks: {
+              autoSkip: false
+            }
+          },
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          },
+          tooltip: {
+            mode: 'index',
+            intersect: false
+          }
+        },
+        interaction: {
+          mode: 'nearest',
+          axis: 'x',
+          intersect: false
+        }
+      }
+    });
+
+    // Fetch dates with data and initialize the date picker
+    async function initializeDatePicker() {
+      try {
+        const response = await fetch('/data-dates');
+        const datesWithData = await response.json();
+
+        // Initialize Flatpickr
+        flatpickr("#date", {
+          dateFormat: "Y-m-d",
+          defaultDate: "<%= selectedDate %>",
+          onChange: function(selectedDates, dateStr, instance) {
+            // Do nothing here; form will be submitted when the user clicks the "View" button
+          },
+          // Enable selection of months and years
+          monthSelectorType: 'dropdown',
+          yearSelectorType: 'dropdown',
+          // Only enable dates with data
+          enable: datesWithData,
+          // Disable mobile mode to ensure consistent behavior across devices
+          disableMobile: true
+        });
+      } catch (err) {
+        console.error('Failed to fetch dates with data:', err);
+      }
+    }
+
+    initializeDatePicker();  // Call the function to initialize the date picker
+  </script>
+</body>
+</html>

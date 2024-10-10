@@ -1,0 +1,216 @@
+<!-- live.ejs -->
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Live Sensor Data</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 10px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.8rem;
+    }
+
+    .sensor-data {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .sensor-box {
+      background-color: white;
+      padding: 10px;
+      margin: 8px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+      width: 180px;
+      text-align: center;
+    }
+
+    .sensor-box h2 {
+      font-size: 1.1rem;
+      margin-bottom: 10px;
+    }
+
+    .sensor-box p {
+      font-size: 1.5rem;
+      margin: 0;
+    }
+
+    nav {
+      text-align: center;
+      margin-top: 20px;
+      margin-bottom: 15px;
+    }
+
+    a {
+      margin: 0 8px;
+      text-decoration: none;
+      color: blue;
+    }
+
+    #timestamp {
+      text-align: center;
+      margin-top: 15px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+
+<body>
+  <nav>
+    <a href="/">Live View</a> |
+    <a href="/history">History View</a>
+  </nav>
+  <h1>Live Sensor Data</h1>
+
+  <!-- Display the most recent timestamp -->
+  <div id="timestamp"></div>
+
+  <div id="sensor-data" class="sensor-data">
+    <!-- Live sensor data will be displayed here -->
+  </div>
+
+  <!-- Include socket.io client script -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();  // Establish a socket.io connection
+
+    // Function to compute descriptions for different sensor values
+    function getTemperatureDescription(temperature) {
+      return `${temperature}°C`;
+    }
+
+    function getHumidityDescription(humidity) {
+      return `${humidity}%`; 
+    }
+
+    // Function to compute CO2 level description
+    function getCO2Description(co2) {
+      if (co2 < 1000) {
+        return `Low`;
+      } else if (co2 >= 1000 && co2 < 2000) {
+        return `Moderate`;
+      } else {
+        return `High`;
+      }
+    }
+
+    // Existing functions for light level and TVOC descriptions
+    function getLightLevelDescription(lightLevel) {
+      if (lightLevel < 300) {
+        return 'Dark';
+      } else if (lightLevel >= 300 && lightLevel < 600) {
+        return 'Dim';
+      } else if (lightLevel >= 600 && lightLevel < 900) {
+        return 'Bright';
+      } else {
+        return 'Very Bright';
+      }
+    }
+
+    // Function to compute TVOC level description
+    function getAirQualityDescription(tvoc) {
+      if (tvoc < 25) {
+        return 'Good';
+      } else if (tvoc >= 25 && tvoc < 50) {
+        return 'Moderate';
+      } else if (tvoc >= 50 && tvoc < 75) {
+        return 'Poor';
+      } else {
+        return 'Hazardous';
+      }
+    }
+
+    // Function to display sensor data
+    function displaySensorData(data) {
+      const sensorDataDiv = document.getElementById('sensor-data');
+      const timestampDiv = document.getElementById('timestamp');
+
+      sensorDataDiv.innerHTML = '';  // Clear previous data
+
+      const sensorTypes = ['temperature', 'humidity', 'co2', 'tvoc', 'lightLevel'];
+      const sensorLabels = {
+        temperature: 'Temperature',
+        humidity: 'Humidity',
+        co2: 'CO2 Level',
+        tvoc: 'Air Quality (TVOC)',
+        lightLevel: 'Light Level',
+      };
+
+      // Loop through the sensor data and display it
+      sensorTypes.forEach(type => {
+        let description;
+        if (type === 'temperature') {
+          description = getTemperatureDescription(data.temperature);
+        } else if (type === 'humidity') {
+          description = getHumidityDescription(data.humidity);
+        } else if (type === 'co2') {
+          description = getCO2Description(data.co2);
+        } else if (type === 'lightLevel') {
+          description = getLightLevelDescription(data.lightLevel);
+        } else if (type === 'tvoc') {
+          description = getAirQualityDescription(data.tvoc);
+        } else {
+          description = data[type] !== undefined ? String(data[type]) : 'N/A';
+        }
+        const box = document.createElement('div');
+        box.classList.add('sensor-box');
+        box.innerHTML = `
+      <h2>${sensorLabels[type]}</h2>
+      <p>${description}</p>
+    `;
+        sensorDataDiv.appendChild(box);
+      });
+
+      // Display the timestamp of the latest data
+      if (data.timestamp) {
+        const date = new Date(data.timestamp);
+        const formattedDate = date.toLocaleDateString();
+        const formattedTime = date.toLocaleTimeString();
+        timestampDiv.innerHTML = `Last updated: ${formattedDate} ${formattedTime}`;
+      }
+    }
+
+    // Fetch the latest sensor data on page load
+    async function fetchLatestSensorData() {
+      try {
+        console.log('Fetching initial sensor data...');
+        const response = await fetch('/latest-sensor-data');
+        const data = await response.json();
+        console.log('Initial sensor data:', data);
+
+        if (data && data.timestamp) {
+          displaySensorData(data);  // Display the fetched data
+        } else {
+          console.log('No sensor data available on initial load');
+          document.getElementById('sensor-data').innerHTML = '<p>No sensor data available.</p>';
+        }
+      } catch (err) {
+        console.error('Error fetching initial sensor data:', err);
+        document.getElementById('sensor-data').innerHTML = '<p>Error fetching sensor data.</p>';
+      }
+    }
+
+    // Call the function to fetch data on page load
+    fetchLatestSensorData();
+
+    // Listen for new sensor data via socket.io and update the view
+    socket.on('sensorData', (data) => {
+      console.log('Received new sensor data:', data);
+      displaySensorData(data);  // Display the real-time data
+    });
+
+  </script>
+</body>
+
+</html>
