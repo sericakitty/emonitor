@@ -1,5 +1,10 @@
 ### IoT Experimental Project – Final Course Project
 
+##### Team:
+-  [Serica](https://github.com/sericakitty)
+-  [Linh](https://github.com/LVTLinh)
+-  [Fang](https://github.com/fang-byte)
+
 ## Overview
 
 This project is designed to monitor environmental conditions using a variety of sensors connected to an ESP32 microcontroller. The data collected by the sensors is displayed on an LCD screen and sent to a backend server for further analysis. The backend is built using modern web technologies, providing a robust platform to view and analyze the collected data.
