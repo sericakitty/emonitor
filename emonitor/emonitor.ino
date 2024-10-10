@@ -1,4 +1,13 @@
-#include "config.h"
+// Description: This file contains the main code for the ESP32-based environmental monitoring system.
+
+// WIFI_SSID
+// WIFI_PASSWORD
+// EMONITOR_API_KEY
+// SERVER_URL
+// OPENWEATHERMAP_API_KEY
+// CITY_NAME
+// UNITS
+#include "config.h" // create a config.h file with the above content
 
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -24,7 +33,6 @@ Adafruit_BMP280 bmp;  // Create BMP280 sensor object for temperature and pressur
 float temperature;  // Variable to store temperature reading
 float pressure;  // Variable to store pressure reading
 float altitude;  // Variable to store altitude calculation
-float humidity;  // Variable to store humidity reading (from another sensor if available)
 
 // Light sensor configuration
 const int lightSensorPin = 34;  // Light sensor analog pin (e.g., LDR connected to GPIO 34)
@@ -38,24 +46,11 @@ unsigned long startMillis;  // Store the start time in milliseconds
 const unsigned long period = 300000;  // Interval period for sending data (in milliseconds)
 bool firstTime = true;  // Variable to check if it's the first data send
 
-// Function to get the ESP32 unique ID
-String getESP32ID() {
-  uint64_t chipid = ESP.getEfuseMac();  // Get ESP32 chip ID (essentially its MAC address)
-  String id = String((uint16_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
-  id.toUpperCase();  // Convert to uppercase for better readability
-  return id;
-}
+float externalTemperature = 0.0;  // Variable to store external temperature
+float seaLevelPressure = 1013.25;  // Default sea level pressure in hPa
 
-// Function to get the current timestamp
-String getCurrentTimestamp() {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
-    return "Failed to get time";
-  }
-  char timeStringBuff[25];  // Buffer to hold formatted timestamp
-  strftime(timeStringBuff, sizeof(timeStringBuff), "%Y-%m-%d %H:%M", &timeinfo);
-  return String(timeStringBuff);
-}
+long gmtOffset_sec = 2 * 3600;  // GMT offset for Finland (UTC+2 hours) // change to your timezone
+long daylightOffset_sec = 3600; // Daylight saving time offset (1 hour) // change to your timezone
 
 void setup() {
   // Start serial communication
@@ -65,56 +60,231 @@ void setup() {
   // Initialize the LCD
   lcd.init();
   lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Starting...");
+  Serial.println("LCD initialized.");
+
+  delay(1000);  // Delay to allow the message to be read
 
   // Initialize the gas sensor (CCS811)
+  lcd.clear();
+  lcd.print("Init CCS811...");
+  Serial.println("Initializing CCS811 sensor...");
   if (!ccs.begin()) {
     Serial.println("Failed to start CCS811 sensor! Please check your wiring.");
-    lcd.setCursor(0, 0);
     lcd.print("CCS811 init failed");
     while (1);  // Stop program if sensor initialization fails
   }
+  lcd.clear();
+  lcd.print("CCS811 init OK");
+  Serial.println("CCS811 initialized successfully.");
 
-  // Wait for the sensor to be ready
-  while (!ccs.available());
+  delay(1000);  // Delay to allow the message to be read
+
+  // Wait for the CCS811 sensor to be ready
+  lcd.clear();
+  lcd.print("Waiting CCS811...");
+  Serial.println("Waiting for CCS811 sensor to be ready...");
+  while (!ccs.available()) {
+    delay(100);
+  }
+  lcd.clear();
+  lcd.print("CCS811 ready");
+  Serial.println("CCS811 sensor is ready.");
+
+  delay(1000);  // Delay to allow the message to be read
 
   // Initialize Wi-Fi
+  lcd.clear();
+  lcd.print("Connecting WiFi");
+  Serial.println("Connecting to WiFi...");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  int wifiAttempt = 0;
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
-    Serial.println("Connecting to WiFi...");
+    lcd.setCursor(0, 1);
+    lcd.print("Attempt ");
+    lcd.print(++wifiAttempt);
+    Serial.print(".");
   }
-  Serial.println("Connected to WiFi");
+  lcd.clear();
+  lcd.print("WiFi connected");
+  Serial.println("\nConnected to WiFi");
+
+  delay(1000);  // Delay to allow the message to be read
 
   // Configure time using NTP
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");  // Set timezone to UTC
+  lcd.clear();
+  lcd.print("Configuring time");
+  Serial.println("Configuring time...");
+  configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org", "time.nist.gov"); // Set the time via NTP
+
+  delay(1000);  // Delay to allow the message to be read
+
   Serial.println("Time configured");
+  lcd.clear();
+  lcd.print("Time configured");
+
+  delay(1000);  // Delay to allow the message to be read
 
   // Start BMP280 setup
-  Serial.print("Booting BMP280.");
-  lcd.setCursor(0, 1);
-  lcd.print("Booting BMP280...");
-
+  lcd.clear();
+  lcd.print("Init BMP280...");
+  Serial.println("Initializing BMP280 sensor...");
   // Initialize the BMP280 sensor (temperature and pressure)
   if (!bmp.begin(0x76)) {  // Check if the BMP280 sensor is connected
     Serial.println("Could not find a valid BMP280 sensor, check wiring!");
-    lcd.setCursor(0, 1);
+    lcd.clear();
     lcd.print("BMP280 init failed");
     while (1);  // Stop program if sensor initialization fails
   }
+  lcd.clear();
+  lcd.print("BMP280 init OK");
+  Serial.println("BMP280 initialized successfully.");
 
-  delay(3000);
+  delay(1000);  // Delay to allow the message to be read
 
-  // BMP280 started successfully
-  Serial.print("BMP280 started.");
+  // Fetch weather data from OpenWeatherMap
+  lcd.clear();
+  lcd.print("Fetching weather");
+  Serial.println("Fetching weather data...");
+  fetchWeatherData();  // Fetch weather data from OpenWeatherMap
+  lcd.clear();
+  lcd.print("Weather data OK");
+  Serial.println("Weather data fetched.");
 
-  // Show startup message on the LCD
-  lcd.setCursor(0, 0);
-  lcd.print("Started.");
-  delay(1000);
+  delay(1000);  // Delay to allow the message to be read
+
+  // Setup complete
+  lcd.clear();
+  lcd.print("Setup complete");
+  Serial.println("Setup complete.");
+
+  Serial.println();
+
+  delay(1000);  // Delay to allow the message to be read
+
   lcd.clear();
 
   startMillis = millis();  // Record the start time
 }
+
+// Function to update LCD with sensor data using descriptive text
+void updateDisplayWithSensorData() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+
+  // Display CO2 concentration and air quality description
+  if (airQualityIndex < 25) {
+    lcd.print("Air Quality: Good");
+  } else if (airQualityIndex >= 25 && airQualityIndex < 50) {
+    lcd.print("Air Quality: Mod.");
+  } else if (airQualityIndex >= 50 && airQualityIndex < 75) {
+    lcd.print("Air Quality: Poor");
+  } else {
+    lcd.print("Air Quality: Hazard");
+  }
+
+  // Display temperature in Celsius
+  lcd.setCursor(0, 1);
+  lcd.print("Temp: ");
+  lcd.print(temperature, 1);
+  lcd.print(" *C");
+
+  // Display light level description
+  lcd.setCursor(0, 2);
+  lcd.print("Light: ");
+  lcd.print(lightLevelDescription);
+
+  // Display altitude information
+  lcd.setCursor(0, 3);
+  lcd.print("Altitude: ");
+  lcd.print(altitude, 1);
+  lcd.print(" m");
+}
+
+
+// Function to get the ESP32 unique ID
+String getESP32ID() {
+  uint64_t chipid = ESP.getEfuseMac();  // Get ESP32 chip ID (essentially its MAC address)
+  String id = String((uint16_t)(chipid >> 32), HEX) + String((uint32_t)chipid, HEX);
+  id.toUpperCase();  // Convert to uppercase for better readability
+  return id;
+}
+
+// Function to get the current timestamp with Finnish timezone
+String getCurrentTimestamp() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    return "Failed to get time";  // Return an error message if time is not available
+  }
+
+  char timeStringBuff[30];  // Buffer to hold formatted timestamp
+  // Format the timestamp to include the timezone (%Z prints timezone abbreviation)
+  strftime(timeStringBuff, sizeof(timeStringBuff), "%Y-%m-%d %H:%M", &timeinfo);
+
+  return String(timeStringBuff);
+}
+
+
+void fetchWeatherData() {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+
+    // Construct the OpenWeatherMap API URL
+    String weatherApiUrl = "http://api.openweathermap.org/data/2.5/weather?q=" + String(CITY_NAME) +
+                           "&units=" + String(UNITS) + "&appid=" + String(OPENWEATHERMAP_API_KEY);
+
+    http.begin(weatherApiUrl);  // Initialize HTTPClient with the API URL
+
+    int httpResponseCode = http.GET();  // Send the GET request
+
+    if (httpResponseCode > 0) {
+      String payload = http.getString();  // Get the response payload
+
+      // Manually parse the JSON response to extract temperature and pressure
+      int tempIndex = payload.indexOf("\"temp\":");
+      int pressureIndex = payload.indexOf("\"pressure\":");
+
+      if (tempIndex != -1 && pressureIndex != -1) {
+        // Extract temperature
+        int tempStart = tempIndex + 7;  // Length of "\"temp\":"
+        int tempEnd = payload.indexOf(",", tempStart);
+        String tempString = payload.substring(tempStart, tempEnd);
+        externalTemperature = tempString.toFloat();
+
+        // Extract pressure
+        int pressureStart = pressureIndex + 11;  // Length of "\"pressure\":"
+        int pressureEnd = payload.indexOf(",", pressureStart);
+        if (pressureEnd == -1) {
+          pressureEnd = payload.indexOf("}", pressureStart);  // Handle case when pressure is at the end
+        }
+        String pressureString = payload.substring(pressureStart, pressureEnd);
+        seaLevelPressure = pressureString.toFloat();
+
+        // Debug output
+        Serial.print("External Temperature: ");
+        Serial.print(externalTemperature);
+        Serial.println(" °C");
+
+        Serial.print("Sea Level Pressure: ");
+        Serial.print(seaLevelPressure);
+        Serial.println(" hPa");
+      } else {
+        Serial.println("Failed to parse weather data.");
+      }
+    } else {
+      Serial.print("Error fetching weather data: ");
+      Serial.println(httpResponseCode);
+    }
+
+    http.end();  // Close the HTTP connection
+  } else {
+    Serial.println("WiFi Disconnected");
+  }
+}
+
 
 void readGasSensor() {
   lcd.setCursor(0, 0);  // Set cursor to the first line on LCD
@@ -176,13 +346,30 @@ void readTemperatureSensor() {
   }
 }
 
+float calculateAltitude(float localPressure, float seaLevelPressure, float temp) {
+  // Constants
+  const float R = 287.05;  // Specific gas constant for dry air [J/(kg·K)]
+  const float g = 9.80665;  // Acceleration due to gravity [m/s²]
+  const float L = 0.0065;  // Temperature lapse rate [K/m]
+
+  // Convert temperature to Kelvin
+  float tempK = temp + 273.15;
+
+  // Calculate altitude
+  float exponent = (R * L) / g;
+  float ratio = localPressure / seaLevelPressure;
+  float altitude = (tempK / L) * (1 - pow(ratio, exponent));
+
+  return altitude;
+}
+
 void readPressureSensor() {
   lcd.setCursor(0, 3);  // Set cursor to the fourth line
-  pressure = bmp.readPressure() / 100;  // Read pressure
-  humidity = (pressure / 1000.0F) * 10;
+  pressure = bmp.readPressure() / 100;  // Read local pressure in hPa
 
   if (!isnan(pressure)) {  // Check if pressure reading is valid
-    altitude = bmp.readAltitude(1013.25);  // Calculate altitude
+    // Calculate altitude using external temperature and sea level pressure
+    altitude = calculateAltitude(pressure, seaLevelPressure, externalTemperature);
 
     // Display altitude data on LCD
     lcd.print("Altitude: ");
@@ -190,10 +377,16 @@ void readPressureSensor() {
     lcd.print(" m ");
 
     // Print pressure and altitude readings to Serial Monitor
-    Serial.print("Pressure = ");
+    Serial.print("Local Pressure = ");
     Serial.print(pressure);
     Serial.println(" hPa");
-    Serial.print("Altitude = ");
+    Serial.print("External Temperature = ");
+    Serial.print(externalTemperature);
+    Serial.println(" °C");
+    Serial.print("Sea Level Pressure = ");
+    Serial.print(seaLevelPressure);
+    Serial.println(" hPa");
+    Serial.print("Calculated Altitude = ");
     Serial.print(altitude);
     Serial.println(" meters");
   } else {
@@ -239,10 +432,8 @@ void readLightSensor() {
 void displayDataSendStatus(int httpResponseCode) {
   lcd.clear();  // Clear the LCD screen
   lcd.setCursor(0, 0);
-  lcd.print("Device ID: ");
-  lcd.print(getESP32ID());  // Display device ID on the first line
+  lcd.print("Device ID:");
   lcd.setCursor(0, 1);
-  lcd.print("ID: ");
   lcd.print(getESP32ID());  // Display same device ID as an example (second line)
   lcd.setCursor(0, 2);
   lcd.print(getCurrentTimestamp());  // Display current timestamp on third line
@@ -263,11 +454,10 @@ void sendDataToServer() {
 
     // Create the HTTP POST data string with sensor values
     String httpRequestData = "temperature=" + String(temperature, 1) +
-                             "&humidity=" + String(humidity, 1) +
                              "&co2=" + String(co2ppm) +
                              "&tvoc=" + String(tvocppm) +
                              "&lightLevel=" + String(smoothedLightValue) +
-                             "&API_KEY=" + String(API_KEY);
+                             "&API_KEY=" + String(EMONITOR_API_KEY);
 
     // Send the POST request
     int httpResponseCode = http.POST(httpRequestData);
@@ -298,12 +488,8 @@ void sendDataToServer() {
     // Wait for 3 seconds to show the send status on the screen
     delay(3000);
 
-    // Display sensor data again after showing send status
-    lcd.clear();
-    readGasSensor();
-    readTemperatureSensor();
-    readLightSensor();
-    readPressureSensor();
+    // Update LCD with sensor data after sending
+    updateDisplayWithSensorData();
 
     // Close the connection
     http.end();
@@ -318,6 +504,15 @@ void sendDataToServer() {
 
 void loop() {
   currentMillis = millis();  // Get the current time
+  Serial.print("Current time: ");
+  Serial.println(getCurrentTimestamp());  // Print the current timestamp to Serial Monitor
+
+  // Fetch weather data periodically (e.g., every hour)
+  static unsigned long weatherDataTimer = 0;
+  if (currentMillis - weatherDataTimer > 3600000 || weatherDataTimer == 0) {  // Every 1 hour
+    fetchWeatherData();
+    weatherDataTimer = currentMillis;
+  }
 
   // Read data from all sensors
   readGasSensor();
@@ -336,6 +531,7 @@ void loop() {
     startMillis = currentMillis;
   }
 
+  Serial.println();
   delay(period);  // Wait 5 minutes before updating sensor readings again
   lcd.clear();
 }
